@@ -34,6 +34,7 @@
             this.no = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.tablename = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.button3 = new System.Windows.Forms.Button();
+            this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.SuspendLayout();
             // 
             // button1
@@ -60,7 +61,8 @@
             // 
             this.listView1.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.no,
-            this.tablename});
+            this.tablename,
+            this.columnHeader1});
             this.listView1.GridLines = true;
             this.listView1.Location = new System.Drawing.Point(232, 12);
             this.listView1.Name = "listView1";
@@ -88,6 +90,12 @@
             this.button3.Text = "데이터 이행";
             this.button3.UseVisualStyleBackColor = true;
             // 
+            // columnHeader1
+            // 
+            this.columnHeader1.Text = "적용된행";
+            this.columnHeader1.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.columnHeader1.Width = 100;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
@@ -111,6 +119,7 @@
         private System.Windows.Forms.ColumnHeader no;
         private System.Windows.Forms.ColumnHeader tablename;
         private System.Windows.Forms.Button button3;
+        private System.Windows.Forms.ColumnHeader columnHeader1;
     }
 }
 

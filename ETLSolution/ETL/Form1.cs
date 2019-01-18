@@ -9,16 +9,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static System.Windows.Forms.ListView;
 
 namespace ETL
 {
     public partial class Form1 : Form
     {
-        bool 원본 = false, 대상 = false;
-        MySqlConnection conn1=null, conn2=null;
-        ArrayList 운영테이블;
-
+        private MySqlConnection 원본, 대상;
         public Form1()
         {
             InitializeComponent();
@@ -27,35 +23,22 @@ namespace ETL
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            button1.Click += Button_Click;
-            button2.Click += Button_Click;
-            button3.Click += Button_Click;
-            listView1.FullRowSelect = true;
-            운영테이블 = new ArrayList();
+            button1.Click += btn_event;
+            button2.Click += btn_event;
+            button3.Click += btn_event;
         }
 
-        private void Button_Click(object sender, EventArgs e)
+        private void btn_event(object o, EventArgs a)
         {
-            Button btn = (Button)sender;
-            
-            switch (btn.Name)
+            switch (((Button)o).Name)
             {
                 case "button1":
-                    원본 = 개발();
-                    if (원본)
-                    {
-                        btn.BackColor = Color.DarkOrange;
-                    }
+                    btn_stat(개발(), (Button)o);
                     break;
                 case "button2":
-                    대상 = 운영();
-                    if (대상)
-                    {
-                        btn.BackColor = Color.DarkOrange;
-                    }
+                    btn_stat(운영(), (Button)o);
                     break;
                 case "button3":
-                    if(원본 && 대상)
                     이행();
                     break;
                 default:
@@ -63,29 +46,101 @@ namespace ETL
             }
         }
 
+        private void btn_stat(bool check, Button btn)
+        {
+            if (check)
+            {
+                btn.BackColor = Color.BlueViolet;
+                btn.Enabled = false;
+            }
+            else
+            {
+                btn.BackColor = Color.OrangeRed;
+                btn.Enabled = true;
+            }
+        }
+
+        private bool 이행()
+        {
+            if (button1.BackColor == Color.BlueViolet && button2.BackColor == Color.BlueViolet)
+            {
+                /* 1. 원본 테이블 목록 가져오기 */
+                MySqlDataReader sdr = GetReader(원본, "show tables");
+                ArrayList 원본테이블 = new ArrayList();
+                while (sdr.Read())
+                {
+                    for (int i = 0; i < sdr.FieldCount; i++)
+                    {
+                        MessageBox.Show(sdr.GetValue(i).ToString());
+                        원본테이블.Add(sdr.GetValue(i));
+                    }
+                }
+                sdr.Close();
+
+                foreach (string 테이블명 in 원본테이블)
+                {
+                    /* 2. 원본 테이블 데이터 가져오기 */
+                    string sql = string.Format("select * from {0}", 테이블명);
+                    sdr = GetReader(원본, sql);
+                    int count = 0;
+                    ArrayList colList=new ArrayList();
+                    while (sdr.Read())
+                    {
+                        for (int i = 0; i < sdr.FieldCount; i++)
+                        {
+                            Hashtable ht = new Hashtable();
+                            ht.Add(sdr.GetName(i), sdr.GetValue(i));
+                            colList.Add(ht);
+                        }
+                        count++;
+                    }
+                    sdr.Close();
+
+                    /* 3. 대상 테이블 확인하기 */
+                    sql = string.Format("SELECT 1 FROM Information_schema.tables WHERE table_name = '{0}'", 테이블명);
+                    sdr = GetReader(대상, sql);
+                    bool 확인 = false;
+                    while (sdr.Read())
+                    {
+                        확인 = true;
+                    }
+                    sdr.Close();
+                    if (확인)
+                    {
+                        // 원본 테이블이 대상 데이터베이스에 존재 하기 때문에 초기화 필요
+                        sql = string.Format("DELETE TABLE '{0}'", 테이블명);
+                        SetData(대상, sql);
+
+                    }
+                    sql = string.Format("SHOW CREATE TABLE `{0}`", 테이블명);
+                    sdr = GetReader(원본, sql);
+                    while (sdr.Read())
+                    {
+                        for (int c = 0; c < sdr.FieldCount; c++)
+                        {
+                            SetData(대상, sdr.GetValue(c).ToString());
+                        }
+                    }
+                    sdr.Close();
+                    /* 4. 대상 테이블에 원본 데이터 삽입하기 */
+
+                    /* 5. 이행 결과 리스트뷰에 표현하기 */
+                    listView1.Items.Clear();
+                    listView1.Items.Add(new ListViewItem(new string[] { listView1.Items.Count.ToString(), 테이블명, count.ToString() })); // Sample Test Data
+                }
+                return true;
+            }
+            return false;
+        }
+
         private bool 개발()
         {
             try
             {
-                MessageBox.Show("개발()");
-                string strConnection = string.Format("server={0};user={1};password={2};database={3}","192.168.3.142","root","1234","test");
-                conn1 = GetConnection(strConnection);
-                if(conn1 == null)
-                {
-                    MessageBox.Show("DB 연결 오류!");
-                    return false;
-                }
-                conn1.Open();
-                MessageBox.Show("DB 연결 성공!");
-                string sql = "SHOW TABLES";
-                MySqlDataReader sdr = GetReader(sql, conn1);
-                listView1.Items.Clear();
-                
-                for(int i =1; sdr.Read();i++)
-                {
-                    listView1.Items.Add( new ListViewItem(new string[] {i.ToString(),sdr["Tables_in_test"].ToString()}));
-                }
-                
+                string strConnection =
+                    string.Format("server={0};user={1};password={2};database={3}", "192.168.3.142", "root", "1234", "test");
+                원본 = GetConnection(strConnection);
+                if (원본 == null) return false;
                 return true;
             }
             catch
@@ -98,72 +153,15 @@ namespace ETL
         {
             try
             {
-                MessageBox.Show("운영()");
-                string strConnection = string.Format("server={0};user={1};password={2};database={3}", "192.168.3.155", "root", "1234", "test");
-                MySqlConnection conn2 = GetConnection(strConnection);
-                if (conn2 == null)
-                {
-                    MessageBox.Show("DB 연결 오류!");
-                    return false;
-                }
-                conn2.Open();
-                MessageBox.Show("DB 연결 성공!");
-                string sql = "SHOW TABLES";
-                MySqlDataReader sdr = GetReader(sql, conn2);
-                while (sdr.Read())
-                {
-                    운영테이블.Add(sdr["Tables_in_test"].ToString());
-                }
-                
+                string strConnection =
+                    string.Format("server={0};user={1};password={2};database={3}", "192.168.3.155", "root", "1234", "test");
+                대상 = GetConnection(strConnection);
+                if (대상 == null) return false;
                 return true;
             }
             catch
             {
                 return false;
-            }
-        }
-
-        private bool 이행()
-        {
-            try
-            {
-                MessageBox.Show("이행");
-                SelectedListViewItemCollection col=listView1.SelectedItems;
-                for(int i=0;i< col.Count; i++)
-                {
-                    ListViewItem item = col[i];
-                    MessageBox.Show(item.SubItems[1].Text);
-                    ArrayList list = Table_Select(item.SubItems[1].Text);
-                }
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        private ArrayList Table_Select(string name)
-        {
-            try
-            {
-                ArrayList list = new ArrayList();
-                string sql = string.Format("select * from {0};", name);
-                MySqlDataReader sdr = GetReader(sql, conn1);
-                string result = "[";
-                while (sdr.Read())
-                {
-                    for (int i = 0; i < sdr.FieldCount; i++)
-                    {
-                        result += sdr[i].ToString();
-                    }
-                    result += "]\n";
-                }
-                MessageBox.Show(result);
-                return list;
-            }
-            catch
-            {
-                return null;
             }
         }
 
@@ -173,41 +171,24 @@ namespace ETL
             {
                 MySqlConnection conn = new MySqlConnection();
                 conn.ConnectionString = strConnection;
+                conn.Open();
                 return conn;
             }
-            catch
+            catch (MySqlException e)
             {
+                MessageBox.Show(e.Message);
                 return null;
             }
         }
 
-        private void CloseConnection(MySqlConnection conn)
+        private MySqlDataReader GetReader(MySqlConnection conn, string sql)
         {
             try
             {
-                conn.Close();
-            }
-            catch
-            {
-                MessageBox.Show("연결해제 실패...");
-            }
-        }
-
-        private MySqlDataReader GetReader(string sql,MySqlConnection conn)
-        {
-            try
-            {
-                if (conn.State == ConnectionState.Open)
-                {
-                    MySqlCommand comm = new MySqlCommand();
-                    comm.CommandText = sql;
-                    comm.Connection = conn;
-                    return comm.ExecuteReader();
-                }
-                else
-                {
-                    return null;
-                }
+                MySqlCommand cmd = new MySqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandText = sql;
+                return cmd.ExecuteReader();
             }
             catch
             {
@@ -215,30 +196,19 @@ namespace ETL
             }
         }
 
-        private bool NonQuery(string sql,MySqlConnection conn)
+        private int SetData(MySqlConnection conn, string sql)
         {
             try
             {
-                if (conn.State==ConnectionState.Open)
-                {
-                    MySqlCommand comm = new MySqlCommand(sql, conn);
-                    comm.ExecuteNonQuery();
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                MySqlCommand cmd = new MySqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandText = sql;
+                return cmd.ExecuteNonQuery();
             }
             catch
             {
-                return false;
+                return 0;
             }
-        }
-
-        private void ReaderClose(MySqlDataReader reader)
-        {
-            reader.Close();
         }
     }
 }
